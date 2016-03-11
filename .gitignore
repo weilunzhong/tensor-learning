@@ -1,0 +1,7 @@
+*.npy
+*.sw*
+*.pyc
+*.zip
+*.png
+*.gz
+*.vion-server
