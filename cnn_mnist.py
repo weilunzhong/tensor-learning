@@ -1,5 +1,7 @@
 import tensorflow as tf
+import numpy as np
 import input_data
+from dataset import get_cifar10
 
 # variable creation func
 def weight_variable(shape):
@@ -17,7 +19,7 @@ def conv2d(x, W):
 def max_pool_2x2(x):
 	return tf.nn.max_pool(x, ksize=[1,2,2,1], strides=[1,2,2,1], padding='SAME', name="pool")
 
-
+batch_size = 1
 
 def cnn_approach():
     """
@@ -25,30 +27,30 @@ def cnn_approach():
 	then define the structure layer-wise
 
     """
-    x = tf.placeholder("float", shape=[None, 784], name="x_input")
-    y_ = tf.placeholder("float", shape=[None, 10], name="y_input")
-    x_image = tf.reshape(x, [-1,28,28,1])
+    x = tf.placeholder("float", shape=[batch_size,32,32,3], name="x_input")
+    y_ = tf.placeholder("float", shape=[batch_size, 10], name="y_input")
+    # x_image = tf.reshape(x, [-1,32,32,3])
 
     #first layer
     with tf.name_scope('first_layer') as scope:
-        W_conv1 = weight_variable([5,5,1,32])
-        b_conv1 = bias_variable([32])
-        h_conv1 = tf.nn.relu(conv2d(x_image, W_conv1) + b_conv1)
+        W_conv1 = weight_variable([5,5,3,64])
+        b_conv1 = bias_variable([64])
+        h_conv1 = tf.nn.relu(conv2d(x, W_conv1) + b_conv1)
         h_pool1 = max_pool_2x2(h_conv1)
 
     #second layer
     with tf.name_scope('second_layer') as scope:
-        W_conv2 = weight_variable([5, 5, 32, 64])
-        b_conv2 = bias_variable([64])
+        W_conv2 = weight_variable([5, 5, 64, 128])
+        b_conv2 = bias_variable([128])
         h_conv2 = tf.nn.relu(conv2d(h_pool1, W_conv2) + b_conv2)
         h_pool2 = max_pool_2x2(h_conv2)
 
     # fully connected layer
     with tf.name_scope('fc_layer') as scope:
-        W_fc1 = weight_variable([7 * 7 * 64, 1024])
+        W_fc1 = weight_variable([8 * 8 * 128, 1024])
         b_fc1 = bias_variable([1024])
 
-        h_pool2_flat = tf.reshape(h_pool2, [-1, 7*7*64])
+        h_pool2_flat = tf.reshape(h_pool2, [-1, 8*8*128])
         h_fc1 = tf.nn.relu(tf.matmul(h_pool2_flat, W_fc1) + b_fc1)
 
     # dropout
@@ -87,18 +89,36 @@ def cnn_approach():
         tf.train.write_graph(sess.graph_def,
            '/home/vionlabs/Documents/vionlabs_weilun/machine_learning/tensorflow_testing/cnn_graph',
            'graph.pbtxt')
+        trn, tst = get_cifar10(batch_size)
         for i in range(20000):
-            batch = mnist.train.next_batch(50)
-            if i%100 == 0:
-                train_accuracy = accuracy.eval(feed_dict={x:batch[0], y_: batch[1], prob: 1.0})
-                print "step %d, training accuracy %g"%(i, train_accuracy)
-            train_step.run(feed_dict={x: batch[0], y_: batch[1], prob: 0.5})
+            # batch = mnist.train.next_batch(50)
+            batch_data = trn.next()
+            X = np.vstack(batch_data[0]).reshape(-1, 3, 32, 32).transpose(0, 2, 3, 1)
+            Y = np.array(batch_data[1])
+            Y_LABEL = np.zeros((10))
+            Y_LABEL[Y[0]] = 1
+            Y_LABEL = np.expand_dims(Y_LABEL, axis=0)
+            #  jif i%100 == 0:
+            #  j    for tst_idx in range(0, num_tst_examples, batch_size):
+            #  j        X_tst = tst[0][tst_idx:np.min([tst_idx+batch_size, num_tst_examples]), :]
+            #  j        X_tst = X_tst.reshape(-1, 3, 32, 32).transpose(0, 2, 3, 1)
+            #  j        Y_tst = tst[1][tst_idx:np.min([tst_idx+batch_size, num_tst_examples])]
+            #  j    train_accuracy = accuracy.eval(feed_dict={x: X, y_:Y_LABEL, prob: 1.0})
+            #  j    print "step %d, training accuracy %g"%(i, train_accuracy)
+            #  jtrain_step.run(feed_dict={x: X, y_: Y_LABEL, prob: 0.5})
 
-            # write the log at 100th iteration
-            summary_str = sess.run(merged, feed_dict={x: batch[0], y_: batch[1], prob: 0.5})
-            writer.add_summary(summary_str, 100*i + 1)
-
-        print "test accuracy %g"%accuracy.eval(feed_dict={x: mnist.test.images, y_: mnist.test.labels, prob: 1.0})
+            result = sess.run(
+                      [y_conv, cross_entropy],
+                      feed_dict={
+                          x: X,
+                          y_: Y_LABEL,
+                          prob: 0.5
+                          }
+                     )
+            print "prediction: ", result[0]
+            print "entropy: ", result[1]
+            if i%10==9:
+                break
 
 
 if __name__ == "__main__":
